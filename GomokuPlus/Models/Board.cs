@@ -4,17 +4,27 @@ namespace GomokuPlus.Models;
 
 public class Board
 {
+    // The game is played on a fixed 10 x 10 grid (100 cells), rows and
+    // columns both addressed 1-10 from the player's point of view.
+    public const int StandardSize = 10;
+
     private readonly Cell?[,] _cells;
 
     public int Rows { get; }
     public int Columns { get; }
 
+    // Dimensions stay constructor parameters rather than being hard-coded
+    // so a loaded save rebuilds at whatever size it was written with, and
+    // rule logic can be exercised on a small board in tests. New games all
+    // go through CreateStandard.
     public Board(int rows, int columns)
     {
         Rows = rows;
         Columns = columns;
         _cells = new Cell?[rows, columns];
     }
+
+    public static Board CreateStandard() => new(StandardSize, StandardSize);
 
     public bool IsInBounds(Position p) =>
         p.Row >= 0 && p.Row < Rows && p.Col >= 0 && p.Col < Columns;
@@ -42,15 +52,17 @@ public class Board
     }
 
     // Renders the grid as a bordered ASCII table with 1-based row/column
-    // numbers, e.g. for a 3x3 board:
+    // numbers. Each cell is three characters wide, separated by pipes,
+    // with +---+ rules between rows; empty cells render as blank, e.g.
+    // for a 3x3 board:
     //
     //       1   2   3
     //     +---+---+---+
-    //   1 | . | . | . |
+    //   1 |   |   |   |
     //     +---+---+---+
-    //   2 | . | . | . |
+    //   2 |   |   |   |
     //     +---+---+---+
-    //   3 | . | . | . |
+    //   3 |   |   |   |
     //     +---+---+---+
     //
     // Returns a plain string — no Console calls here — so the presentation
@@ -70,7 +82,7 @@ public class Board
         {
             sb.Append($"{row + 1,2} |");
             for (var col = 0; col < Columns; col++)
-                sb.Append($" {_cells[row, col]?.Symbol ?? '.'} |");
+                sb.Append($" {_cells[row, col]?.Symbol ?? ' '} |");
             sb.AppendLine();
             sb.AppendLine(border);
         }
@@ -92,18 +104,26 @@ public class Board
     // Only lines through lastMove are checked: a single placement can only
     // ever create a new win through the cell it was just placed in, so
     // scanning the whole board every turn would be wasted work.
-    public bool CheckWin(Position lastMove, int winLength = 5)
-    {
-        if (GetCell(lastMove)?.Owner is not { } owner) return false;
+    public bool CheckWin(Position lastMove, int winLength = 5) =>
+        GetCell(lastMove)?.Owner is { } owner && MaxRunThrough(lastMove, owner) >= winLength;
 
+    // The longest line `owner` would have through `pos` in any direction,
+    // treating `pos` as if it belonged to `owner` regardless of what's
+    // actually there. Doesn't mutate the board or require `pos` to be
+    // occupied — callers (AI move evaluation) use this to score a
+    // not-yet-played cell without placing a real stone. CheckWin is the
+    // special case where `pos` already holds the stone being checked.
+    public int MaxRunThrough(Position pos, Player owner)
+    {
+        var max = 0;
         foreach (var (dRow, dCol) in WinDirections)
         {
             var count = 1
-                + CountInDirection(lastMove, dRow, dCol, owner)
-                + CountInDirection(lastMove, -dRow, -dCol, owner);
-            if (count >= winLength) return true;
+                + CountInDirection(pos, dRow, dCol, owner)
+                + CountInDirection(pos, -dRow, -dCol, owner);
+            if (count > max) max = count;
         }
-        return false;
+        return max;
     }
 
     private int CountInDirection(Position from, int dRow, int dCol, Player owner)

@@ -22,8 +22,6 @@ public class Cell
         StoneType = StoneType.Empty;
     }
 
-    public bool IsEmpty => StoneType == StoneType.Empty;
-
     public char Symbol
     {
         get
@@ -48,11 +46,5 @@ public class Cell
     {
         Owner = owner;
         StoneType = StoneType.Heavy;
-    }
-
-    public void Clear()
-    {
-        Owner = null;
-        StoneType = StoneType.Empty;
     }
 }
